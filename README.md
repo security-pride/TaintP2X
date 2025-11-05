@@ -63,6 +63,19 @@ Where:
 
 Use `unified_analysis.py` to analyze the detected projects. This script iterates through the projects configured in `PROJECT_NAMES` and performs taint analysis and DeepSeek LLM-assisted verification for each project.
 
+## Citation  
+
+If you use this code in your research, please cite our paper:
+
+```
+@article{taintp2x,
+  title={TaintP2X: Detecting Taint-Style Prompt-to-Anything Injection Vulnerabilities in LLM-Integrated Applications},
+  author={Junjie He and Shenao Wang and Yanjie Zhao and Xinyi Hou and Zhao Liu and Quanchen Zou and Haoyu Wang},
+  journal={},
+  year={2025}
+}
+```
+
 ## Contributing
 
 We welcome contributions! Feel free to submit pull requests or open issues to report bugs and suggest features. For any questions or support, please contact hjj@hust.edu.cn.
