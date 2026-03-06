@@ -47,6 +47,115 @@ class SourceDeterminer:
 以下是您需要分析的可疑代码片段和调用链：
 """
 
+    def process_project(self, project_name, taint_output_file):
+        """
+        直接处理项目的 taint-output.json 文件，执行完整的分析流程。
+        """
+        print(f"--- 开始 LLM Source 验证: {project_name} ---")
+        
+        project_log_dir = os.path.join(self.log_dir, project_name)
+        self.create_folder(project_log_dir)
+        
+        # 读取 taint-output.json
+        issues = []
+        try:
+            with open(taint_output_file, 'r') as f:
+                content = f.read()
+                try:
+                    data = json.loads(content)
+                    if isinstance(data, list):
+                        issues = [i for i in data if i.get('kind') == 'issue']
+                    elif isinstance(data, dict) and data.get('kind') == 'issue':
+                        issues = [data]
+                except json.JSONDecodeError:
+                    for line in content.splitlines():
+                        if not line.strip(): continue
+                        try:
+                            item = json.loads(line)
+                            if item.get('kind') == 'issue':
+                                issues.append(item)
+                        except:
+                            pass
+        except Exception as e:
+            print(f"读取 taint-output.json 失败: {e}")
+            return
+
+        print(f"共发现 {len(issues)} 个 issue。")
+
+        for i, issue_data in enumerate(issues, 1):
+            issue_dir = os.path.join(project_log_dir, str(i))
+            self.create_folder(issue_dir)
+            
+            with open(os.path.join(issue_dir, "issue_data.json"), "w") as f:
+                json.dump(issue_data, f, indent=2)
+
+            source_info = self._extract_source_info_from_issue(issue_data)
+            
+            if not source_info:
+                print(f"Issue {i}: 无法提取 Source 信息，跳过。")
+                continue
+                
+            with open(os.path.join(issue_dir, "file_paths_and_lines.json"), "w") as f:
+                json.dump([source_info], f, indent=4)
+                
+            target_path = source_info['file_path']
+            # 尝试查找文件的绝对路径
+            potential_paths = [
+                os.path.join(self.project_base_path, project_name, target_path),
+                os.path.join(self.project_base_path, target_path),
+                os.path.abspath(target_path)
+            ]
+            if not os.path.isabs(target_path):
+                 potential_paths.append(os.path.join(self.project_base_path, target_path))
+
+            final_path = None
+            for p in potential_paths:
+                if os.path.exists(p):
+                    final_path = p
+                    break
+            
+            if not final_path:
+                print(f"警告: 无法找到文件 {target_path}")
+                continue
+            
+            method_content = self.extract_method_by_line(final_path, source_info['line_number'])
+            
+            context_file = os.path.join(issue_dir, "context_output.txt")
+            with open(context_file, "w") as f:
+                f.write(f"File: {final_path}, Line: {source_info['line_number']}\n")
+                f.write("方法内容：\n")
+                f.write(method_content)
+                
+            self.interact_with_deepseek(i, method_content, project_name, i)
+
+        self.check_and_merge_duplicate_issues(project_name)
+
+    def _extract_source_info_from_issue(self, issue_data):
+        try:
+            traces = issue_data.get('data', {}).get('traces', [])
+            for trace in traces:
+                if trace.get('name') == 'source':
+                    roots = trace.get('roots', [])
+                    if roots:
+                        root = roots[0]
+                        location = root.get('location')
+                        if not location and root.get('leaves'):
+                            location = root['leaves'][0].get('location')
+                        
+                        if location:
+                            filename = location.get('filename')
+                            if filename and filename.startswith('/'):
+                                filename = filename[1:]
+                            return {
+                                "file_path": filename,
+                                "line_number": int(location.get('line')),
+                                "function_name": issue_data.get('data', {}).get('callable', 'unknown')
+                            }
+            return None
+        except Exception as e:
+            print(f"提取 Source 信息出错: {e}")
+            return None
+
     def count_issues(self, taint_output_file):
         try:
             with open(taint_output_file, "r") as file:
