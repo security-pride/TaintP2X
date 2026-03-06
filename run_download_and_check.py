@@ -180,6 +180,39 @@ def process_github_repo(repo, download_dir, max_retries=3):
 
             # 检查是否有问题
             has_issue = run_pysa_check(target_dir)
+
+            if has_issue:
+                try:
+                    # 集成 LLM 验证
+                    import sys
+                    llm_val_dir = os.path.abspath("LLM-assisted_Validation")
+                    if llm_val_dir not in sys.path:
+                        sys.path.append(llm_val_dir)
+                    
+                    from ds_llm_source_determine_mul import SourceDeterminer
+                    from ds_llm_fully_determine_mul import FullyDeterminer
+                    
+                    print(f"开始对仓库 {full_repo_name} 进行 LLM 深度验证...")
+                    log_dir = os.path.abspath("./llm_validation_logs")
+                    if not os.path.exists(log_dir): os.makedirs(log_dir)
+                    
+                    # 实例化
+                    source_determiner = SourceDeterminer(os.path.abspath(download_dir), log_dir)
+                    fully_determiner = FullyDeterminer(os.path.abspath(download_dir), log_dir)
+                    
+                    taint_output_file = os.path.abspath(f"./pysa_result/pysa-runs_{unique_dir_name}/taint-output.json")
+                    
+                    if os.path.exists(taint_output_file):
+                        source_determiner.process_project(unique_dir_name, taint_output_file)
+                        fully_determiner.process_project(unique_dir_name, taint_output_file, log_dir)
+                        print(f"仓库 {full_repo_name} 的 LLM 深度验证完成。")
+                    else:
+                        print(f"警告: 未找到污点分析结果文件 {taint_output_file}")
+                        
+                except Exception as e:
+                    print(f"LLM 验证出错: {e}")
+                    import traceback
+                    traceback.print_exc()
             
             # 使用文件锁更新检查记录
             with file_lock:
