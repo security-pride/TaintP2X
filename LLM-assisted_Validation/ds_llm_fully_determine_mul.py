@@ -47,6 +47,98 @@ class FullyDeterminer:
 以下是您需要分析的可疑代码片段和调用链：
 """
 
+    def process_project(self, project_name, taint_output_file, source_determiner_log_dir):
+        """
+        处理项目的 taint-output.json，根据 SourceDeterminer 的结果进一步分析完整调用链。
+        """
+        print(f"--- 开始 LLM Fully 验证: {project_name} ---")
+        
+        project_log_dir = os.path.join(self.log_dir, project_name)
+        if not os.path.exists(project_log_dir):
+            os.makedirs(project_log_dir)
+
+        issues = []
+        try:
+            with open(taint_output_file, 'r') as f:
+                content = f.read()
+                try:
+                    data = json.loads(content)
+                    if isinstance(data, list):
+                        issues = [i for i in data if i.get('kind') == 'issue']
+                    elif isinstance(data, dict) and data.get('kind') == 'issue':
+                        issues = [data]
+                except json.JSONDecodeError:
+                    for line in content.splitlines():
+                        if not line.strip(): continue
+                        try:
+                            item = json.loads(line)
+                            if item.get('kind') == 'issue':
+                                issues.append(item)
+                        except:
+                            pass
+        except Exception as e:
+            print(f"读取 taint-output.json 失败: {e}")
+            return
+
+        vulnerable_issues = self._get_vulnerable_issues(project_name, source_determiner_log_dir)
+        print(f"SourceDeterminer 确定的可疑 issue: {vulnerable_issues}")
+        
+        for issue_num in vulnerable_issues:
+            if issue_num < 1 or issue_num > len(issues): continue
+            
+            issue_data = issues[issue_num - 1]
+            issue_dir = os.path.join(project_log_dir, str(issue_num))
+            if not os.path.exists(issue_dir):
+                os.makedirs(issue_dir)
+            
+            trace_chain = self._extract_trace_chain(issue_data)
+            self._interact_with_llm(issue_num, trace_chain, project_name, issue_dir)
+
+    def _get_vulnerable_issues(self, project_name, source_log_dir):
+        vulnerable_issues = []
+        base_dir = os.path.join(source_log_dir, project_name)
+        if not os.path.exists(base_dir): return []
+        for item in os.listdir(base_dir):
+            if not os.path.isdir(os.path.join(base_dir, item)): continue
+            try:
+                response_file = os.path.join(base_dir, item, "response_output.json")
+                if os.path.exists(response_file):
+                    with open(response_file, "r") as f:
+                        if json.load(f).get("is_vulnerability", False):
+                            vulnerable_issues.append(int(item))
+            except: pass
+        return sorted(vulnerable_issues)
+
+    def _extract_trace_chain(self, issue_data):
+        chain = []
+        try:
+            # 简化版 Trace 提取
+            chain.append(f"Callable: {issue_data.get('data', {}).get('callable')}")
+            # 可以扩展更详细的 trace 提取
+        except Exception as e:
+            chain.append(f"Error extracting trace: {e}")
+        return "\n".join(chain)
+
+    def _interact_with_llm(self, issue_number, context, project_name, issue_dir):
+        response_file = os.path.join(issue_dir, "response_output.json")
+        if os.path.exists(response_file): return
+
+        deepseek_input = f"Issue {issue_number}\n{self.system_prompt}\n\nTrace info:\n {context}\n"
+        try:
+            response_data = self.llm_client.chat_completion(
+                model="deepseek-ai/DeepSeek-V3",
+                messages=[{"role": "user", "content": deepseek_input}],
+                temperature=0,
+                max_tokens=1024,
+                response_format={"type": "json_object"}
+            )
+            if 'choices' in response_data and response_data['choices']:
+                with open(response_file, "w") as f:
+                    f.write(response_data['choices'][0]['message']['content'])
+                print(f"DeepSeek 响应已保存: {response_file}")
+        except Exception as e:
+            print(f"LLM 交互出错: {e}")
+
     def get_project_names_starting_with_a(self, base_path):
         """
         获取指定目录下所有以 'a' 开头的项目名称。
