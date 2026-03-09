@@ -68,12 +68,13 @@ Use `unified_analysis.py` to analyze the detected projects. This script iterates
 If you use this code in your research, please cite our paper:
 
 ```
-@inproceedings{taintp2x2026,
-  title={TaintP2X: Detecting Taint-Style Prompt-to-Anything Injection Vulnerabilities in LLM-Integrated Applications},
-  author={He, Junjie and Wang, Shenao and Zhao, Yanjie and Hou, Xinyi and Liu, Zhao and Zou, Quanchen and Wang, Haoyu},
-  booktitle={Proceedings of the 48th International Conference on Software Engineering (ICSE 2026)},
-  year={2026},
-  note={To appear}
+@inproceedings{icse26taintp2x,
+author = {He, Junjie and Wang, Shenao and Zhao, Yanjie and Hou, Xinyi and Liu, Zhao and Zou, Quanchen and Wang, Haoyu},
+title = {TaintP2X: Detecting Taint-Style Prompt-to-Anything Injection Vulnerabilities in LLM-Integrated Applications},
+year = {2026},
+booktitle = {Proceedings of the IEEE/ACM 48th International Conference on Software Engineering},
+doi = {10.1145/3744916.3773199},
+url = {https://doi.org/10.1145/3744916.3773199}
 }
 ```
 
