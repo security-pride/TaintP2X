@@ -2,9 +2,13 @@ import os
 import json
 import sys
 
-# 导入重构后的类
-from .ds_llm_source_determine_mul import SourceDeterminer
-from .ds_llm_fully_determine_mul import FullyDeterminer
+# 导入重构后的类，兼容包内和直接运行两种方式。
+try:
+    from .ds_llm_source_determine_mul import SourceDeterminer
+    from .ds_llm_fully_determine_mul import FullyDeterminer
+except ImportError:
+    from ds_llm_source_determine_mul import SourceDeterminer
+    from ds_llm_fully_determine_mul import FullyDeterminer
 
 # 全局变量
 LOG_DIR = "log_zhipu"

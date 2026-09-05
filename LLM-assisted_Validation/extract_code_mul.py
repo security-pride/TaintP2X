@@ -1,6 +1,10 @@
 import json
 import os
-import requests
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from codex_llm import codex_chat_json
 
 def extract_method_by_line(file_path: str, target_line: int) -> str:
     """根据指定行号提取内容，小文件取全部，大文件取前200行+目标行上下文，并标明行号和文件名"""
@@ -147,40 +151,16 @@ def find_target_function_and_extract_code(json_file_path: str, project_base_path
         return None, None
 
 def call_deepseek_api(prompt: str) -> dict:
-    """调用DeepSeek API进行分析"""
-    url = "https://api.siliconflow.cn/v1/chat/completions"
-    payload = {
-        "model": "Pro/deepseek-ai/DeepSeek-V3",
-        "messages": [
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
-        "temperature": 0,
-        "max_tokens": 1024,
-        "response_format": {"type": "json_object"}
-    }
-    headers = {
-        "Authorization": "Bearer sk-123",
-        "Content-Type": "application/json"
-    }
+    """调用本地 Codex 进行分析"""
+    response_data = codex_chat_json(prompt, cwd=os.path.dirname(__file__))
+    if "choices" not in response_data or not response_data["choices"]:
+        return {"error": f"codex 返回数据格式错误: {response_data}"}
 
+    json_content = response_data["choices"][0]["message"]["content"]
     try:
-        response = requests.request("POST", url, json=payload, headers=headers)
-        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
-        response_data = response.json()
-        if 'choices' not in response_data or not response_data['choices']:
-            print("DeepSeek API返回数据格式错误")
-            return {"error": "DeepSeek API返回数据格式错误"}
-        
-        json_content = response_data['choices'][0]['message']['content']
         return json.loads(json_content)
-    except requests.exceptions.RequestException as e:
-        print(f"DeepSeek API调用出错: {e}")
-        return {"error": f"DeepSeek API调用出错: {e}"}
     except json.JSONDecodeError as e:
-        print(f"JSON解析错误，原始内容：\n{response.text if 'response' in locals() else '无响应内容'}")
+        print(f"JSON解析错误，原始内容：\n{json_content}")
         print(f"错误详情：{e}")
         return {"error": f"JSON解析错误: {e}"}
 

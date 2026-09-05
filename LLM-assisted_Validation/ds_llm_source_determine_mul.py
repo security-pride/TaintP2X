@@ -2,15 +2,18 @@ import re
 import json
 import subprocess
 import os
-from openai import OpenAI
-from ..Source_Identification.llm_client import LLMClient
+import sys
+try:
+    from ..Source_Identification.llm_client import LLMClient
+except ImportError:
+    from Source_Identification.llm_client import LLMClient
 
 
 class SourceDeterminer:
     def __init__(self, project_base_path, log_dir):
         self.project_base_path = project_base_path
         self.log_dir = log_dir
-        self.llm_client = LLMClient(api_key="sk-123") # Replace with your actual API key
+        self.llm_client = LLMClient()
         self.system_prompt = """
 您是一位专门识别代码中污点源函数的软件安全专家。为了进行精确分析，您需要具备扎实的Python编程能力和污点流分析技能。
 现在，您的任务是检查一个开源项目（使用Python编写）中的函数是否是请求大模型对话API的函数。判断标准如下：
@@ -554,7 +557,8 @@ class SourceDeterminer:
                 if "json.decoder.JSONDecodeError" in error_message:
                     with open(response_file.replace(".json", "_raw.txt"), "w") as f_raw:
                         f_raw.write(str(response_data))
-                    print(f"原始响应已保存到 {response_file.replace(".json", "_raw.txt")}")
+                    raw_response_file = response_file.replace(".json", "_raw.txt")
+                    print(f"原始响应已保存到 {raw_response_file}")
                 sys.exit(1)
         except Exception as e:
                 print(f"处理 issue {issue_number} 时发生未知错误：{str(e)}")
@@ -597,7 +601,4 @@ class SourceDeterminer:
 
 #     # 检查并合并重复的 issues
 #     check_and_merge_duplicate_issues(project_name)
-
-
-
 
