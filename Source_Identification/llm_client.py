@@ -1,11 +1,12 @@
-import requests
-import json
+from __future__ import annotations
+
+from typing import Any, Dict, Iterable
+
+from codex_llm import codex_chat_json
 
 class LLMClient:
-    def __init__(self, api_key: str, model: str = "Pro/deepseek-ai/DeepSeek-V3"):
-        self.api_key = api_key
+    def __init__(self, api_key: str | None = None, model: str = "gpt-5.4-mini"):
         self.model = model
-        self.url = "https://api.siliconflow.cn/v1/chat/completions"
     
     def analyze_code(self, prompt: str, method_code: str) -> Dict:
         """
@@ -20,25 +21,17 @@ class LLMClient:
         """
         full_prompt = prompt.format(method_code=method_code)
         
-        try:
-            payload = {
-                "model": self.model,
-                "messages": [{"role": "user", "content": full_prompt}],
-                "temperature": 0,
-                "max_tokens": 1024,
-                "response_format": {"type": "json_object"}
-            }
+        return codex_chat_json(full_prompt, model=self.model)
 
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-
-            response = requests.post(self.url, json=payload, headers=headers)
-            response.raise_for_status()
-            return response.json()
-            
-        except requests.exceptions.RequestException as e:
-            return {"error": f"Request Error: {e}", "analysis": None}
-        except Exception as e:
-            return {"error": f"Unexpected error: {e}", "analysis": None}
+    def chat_completion(
+        self,
+        messages: Iterable[dict[str, Any]],
+        *,
+        model: str | None = None,
+        temperature: float = 0,
+        max_tokens: int = 1024,
+        response_format: dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
+        """Compatibility adapter for the OpenAI-style calls used by validators."""
+        prompt = "\n\n".join(str(message.get("content", "")) for message in messages)
+        return codex_chat_json(prompt, model=self.model)

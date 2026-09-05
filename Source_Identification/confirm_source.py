@@ -2,11 +2,13 @@ import json
 import sys
 import os
 from typing import Dict, List, Optional
-import requests 
-from llm_client import LLMClient
+try:
+    from .llm_client import LLMClient
+except ImportError:
+    from llm_client import LLMClient
 
 # 在文件顶部初始化LLMClient
-llm_client = LLMClient(api_key="sk-123")
+llm_client = LLMClient()
 
 # 修改analyze_model_calls函数
 def analyze_model_calls(method_code: str) -> Dict:

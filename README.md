@@ -36,6 +36,8 @@ Employs a semantic-driven two-stage analysis, using source controllability analy
 
 This project requires Pyre to be installed. Link: https://pyre-check.org/docs/pysa-quickstart/
 
+The LLM-assisted validation scripts use the local `codex` CLI. Make sure `codex` is available in `PATH` and authenticated before running the validation pipeline.
+
 
 ## Usage
 

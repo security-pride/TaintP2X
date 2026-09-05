@@ -1,19 +1,16 @@
 import json
 import os
-from openai import OpenAI
-from zhipuai import ZhipuAI
-import requests
-import sys
-import re
-from typing import Dict
-from ..Source_Identification.llm_client import LLMClient
+try:
+    from ..Source_Identification.llm_client import LLMClient
+except ImportError:
+    from Source_Identification.llm_client import LLMClient
 
 
 class FullyDeterminer:
     def __init__(self, project_base_path, log_dir):
         self.project_base_path = project_base_path
         self.log_dir = log_dir
-        self.llm_client = LLMClient(api_key="sk-123") # Replace with your actual API key
+        self.llm_client = LLMClient()
         self.system_prompt = """
 您是一位专门识别代码中污点传播路径的软件安全专家。为了进行精确分析，您需要具备扎实的Python编程能力和污点流分析技能。
 现在，您的任务是检查一个开源项目（使用Python编写）中的函数是否存在污点传播。判断标准如下：
@@ -593,6 +590,42 @@ class FullyDeterminer:
                 print(f"调用DeepSeek API时出错: {str(e)}")
                 analysis_results.append({"error": f"DeepSeek API call error: {str(e)}", **call})
 
+        # Build the prompt for the chain-level verdict before making the final request.
+        sanitizer_implementations = self.get_sanitizer_implementations(
+            analysis_results, trace_chain, project_name
+        )
+        chain_prompt = f"""基于以下调用链的分析结果和过滤函数的具体实现，请评估整体的污点传播可靠性：
+
+调用链分析结果：
+{json.dumps(analysis_results, indent=2, ensure_ascii=False)}
+
+对于调用链的分析结果，请重点关注 analysis_reason：
+1. 如果任何局部分析中断了污点传播，全局分析必须考虑这一点。
+2. 即使污点传播到 sink 函数，也要评估 sink 是否真的会执行危险操作。
+3. 对于静态分析工具的执行点，即使接收了污点数据，也不会实际执行代码。
+
+过滤函数实现：
+{json.dumps(sanitizer_implementations, indent=2, ensure_ascii=False)}
+"""
+
+        if vuln_type and isinstance(vuln_type, list):
+            for vtype in vuln_type:
+                if vtype in type_specific_prompts:
+                    chain_prompt += "\n" + type_specific_prompts[vtype]
+
+        chain_prompt += """
+
+请详细分析过滤函数是否有效、污点是否能够绕过限制，以及结合完整调用链判断漏洞是否能够触发。
+请以严格 JSON 格式返回：
+{
+    "issue_number": <调用链编号>,
+    "is_vulnerability": true/false,
+    "reason": <判断原因（中文）>,
+    "triggering_conditions": <触发条件（中文）>,
+    "poc": <PoC 示例>
+}
+"""
+
         try:
             final_response = self.llm_client.chat_completion(
                 messages=[
@@ -613,33 +646,14 @@ class FullyDeterminer:
                 except json.JSONDecodeError as je:
                     print(f"JSON解析错误，原始内容：\n{json_content}")
                     print(f"错误详情：{str(je)}")
-                    final_analysis = {
-                        "issue_number": os.path.basename(os.path.dirname(log_file)),
-                        "is_vulnerability": False,
-                        "reason": "JSON解析错误，无法完成分析",
-                        "triggering_conditions": "无法确定",
-                        "poc": "无法生成"
-                    }
+                    raise ValueError("最终综合分析返回的内容不是有效 JSON") from je
             else:
                 print("Warning: Unexpected LLM response structure or empty choices for final analysis.")
-                final_analysis = {
-                    "issue_number": os.path.basename(os.path.dirname(log_file)),
-                    "is_vulnerability": False,
-                    "reason": "LLM响应结构异常，无法完成分析",
-                    "triggering_conditions": "无法确定",
-                    "poc": "无法生成"
-                }
-                sys.exit(1)  # JSON解析错误也直接退出
+                raise RuntimeError("最终综合分析的 LLM 响应结构异常")
 
         except Exception as e:
             print(f"调用 DeepSeek 进行综合分析时出错: {str(e)}")
-            final_analysis = {
-                "issue_number": os.path.basename(os.path.dirname(log_file)),
-                "is_vulnerability": False,
-                "reason": f"DeepSeek API调用错误: {str(e)}",
-                "triggering_conditions": "无法确定",
-                "poc": "无法生成"
-            }
+            raise RuntimeError("调用 LLM 进行综合分析失败") from e
 
         # 构建输出JSON
         output_json = {
@@ -664,5 +678,3 @@ class FullyDeterminer:
             'individual_analysis': analysis_results,
             'chain_analysis': final_analysis
         }
-
-

@@ -36,6 +36,8 @@ LLM 辅助误报剪枝：
 
 本项目需要安装pyre，链接https://pyre-check.org/docs/pysa-quickstart/
 
+LLM 辅助验证脚本使用本地 `codex` 命令行工具。运行验证流程前，请确保 `codex` 已加入 `PATH` 并完成认证。
+
 
 ## 使用
 
